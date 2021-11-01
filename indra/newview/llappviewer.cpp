@@ -148,6 +148,7 @@
 
 #if LL_WINDOWS
 #	include <share.h> // For _SH_DENYWR in processMarkerFiles
+#include <timeapi.h>
 #else
 #   include <sys/file.h> // For processMarkerFiles
 #endif
@@ -250,6 +251,8 @@
 #include "glib.h"
 #endif // LL_LINUX && LL_GTK
 
+#include <precisesleep.h>
+
 static LLAppViewerListener sAppViewerListener(LLAppViewer::instance);
 
 ////// Windows-specific includes to the bottom - nasty defines in these pollute the preprocessor
@@ -316,6 +319,10 @@ F32SecondsImplicit gFrameIntervalSeconds = 0.f;
 F32 gFPSClamped = 10.f;						// Pretend we start at target rate.
 F32 gFrameDTClamped = 0.f;					// Time between adjacent checks to network for packets
 U64MicrosecondsImplicit	gStartTime = 0; // gStartTime is "private", used only to calculate gFrameTimeSeconds
+
+#if LL_WINDOWS
+U32 mm_timer_resolution;
+#endif
 
 LLTimer gRenderStartTime;
 LLFrameTimer gForegroundTime;
@@ -1259,6 +1266,20 @@ bool LLAppViewer::init()
 	joystick->setNeedsReset(true);
 	/*----------------------------------------------------------------------*/
 
+#if LL_WINDOWS
+	// Set timer resolution lower, so that we can sleep more precisely for FPS throttling
+	// Note that prior to Win10 2004, this affects the global (!) timer resolution,
+	// which is why we set it no lower than 8 unless we are on at least W10 2004
+	mm_timer_resolution = 8;
+
+	OSVERSIONINFO winver;
+	ZeroMemory(&winver, sizeof(OSVERSIONINFO));
+	winver.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+	GetVersionEx(&winver);
+
+	if (winver.dwMajorVersion >= 10 && winver.dwBuildNumber >= 19041)
+		mm_timer_resolution = 1;
+#endif
 	gSavedSettings.getControl("FramePerSecondLimit")->getSignal()->connect(boost::bind(&LLAppViewer::onChangeFrameLimit, this, _2));
 	onChangeFrameLimit(gSavedSettings.getLLSD("FramePerSecondLimit"));
 
@@ -1490,7 +1511,7 @@ bool LLAppViewer::doFrame()
 							LL_RECORD_BLOCK_TIME(FTM_SLEEP);
 							// llclamp for when time function gets funky
 							U64 sleep_time = llclamp(mMinMicroSecPerFrame - elapsed_time, (U64)1, (U64)1e6);
-							micro_sleep(sleep_time, 0);
+							precise_sleep(sleep_time);
 						}
 					}
 					last_call = LLTimer::getTotalTime();
@@ -5437,13 +5458,25 @@ void LLAppViewer::disconnectViewer()
 
 bool LLAppViewer::onChangeFrameLimit(LLSD const & evt)
 {
+#if LL_WINDOWS
+	static bool isTimerResolution = false;
+#endif
+	
 	if (evt.asInteger() > 0)
 	{
 		mMinMicroSecPerFrame = 1000000 / evt.asInteger();
+#if LL_WINDOWS
+		if (!isTimerResolution)
+			isTimerResolution = (timeBeginPeriod(mm_timer_resolution) == TIMERR_NOERROR);
+#endif
 	}
 	else
 	{
 		mMinMicroSecPerFrame = 0;
+#if LL_WINDOWS
+		if (isTimerResolution)
+			isTimerResolution = (timeEndPeriod(mm_timer_resolution) != TIMERR_NOERROR);
+#endif
 	}
 	return false;
 }
