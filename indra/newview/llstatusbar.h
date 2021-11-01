@@ -130,7 +130,9 @@ private:
 
 	LLStatGraph *mSGBandwidth;
 	LLStatGraph *mSGPacketLoss;
+	LLStatGraph *mSGSpinLock;
 
+	LLUICtrl    *mFpsSpinlockPanel;
 	LLView		*mPanelPopupHolder;
 	LLButton	*mBtnQuickSettings;
 	LLButton	*mBtnAO;

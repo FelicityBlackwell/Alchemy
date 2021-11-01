@@ -64,6 +64,7 @@
 #include "llsdserialize.h"
 #include "llcorehttputil.h"
 #include "llvoicevivox.h"
+#include "precisesleep.h"
 
 namespace LLStatViewer
 {
@@ -152,6 +153,9 @@ LLTrace::SampleStatHandle<>	FPS_SAMPLE("fpssample"),
 
 LLTrace::SampleStatHandle<LLUnit<F32, LLUnits::Percent> > 
 							PACKETS_LOST_PERCENT("packetslostpercentstat");
+
+LLTrace::SampleStatHandle<LLUnit<F64, LLUnits::Percent>>
+							FPS_LIMIT_SPIN_LOCK_PERCENT("fpslimitspinlockpercentstat");
 
 static LLTrace::SampleStatHandle<bool> 
 							CHAT_BUBBLES("chatbubbles", "Chat Bubbles Enabled");
@@ -273,6 +277,14 @@ void LLViewerStats::updateFrameStats(const F64Seconds time_diff)
 		sample(LLStatViewer::MAX_BANDWIDTH, F64Bits(max_bandwidth));
 	}
 	
+	if (time_diff > (F64Seconds)0.0 && gPercentInSpin >= 0.0)
+	{
+		F64 fPercentInSpin = 0.0;
+		if (gSavedSettings.getLLSD("FramePerSecondLimit").asInteger() > 0)
+			fPercentInSpin = gPercentInSpin;
+		sample(LLStatViewer::FPS_LIMIT_SPIN_LOCK_PERCENT, LLUnits::Percent::fromValue(fPercentInSpin));
+	}
+
 	mLastTimeDiff = time_diff;
 }
 

@@ -8,30 +8,45 @@
 // https://blat-blatnik.github.io/computerBear/making-accurate-sleep-function/
 
 
-#define MAX_U64 (UINT64_MAX - 1500000)
-#define MAX_F64 1e150
+#define MAX_U64 (UINT64_MAX - 25000000)
+#define MAX_F64 1e25
 #define INIT_ESTIMATE 5000000
 
+F64 gPercentInSpin = -1.0;
+
+using namespace std;
+using namespace std::chrono;
 
 void precise_sleep(U64 microseconds)
 {
-    using namespace std;
-    using namespace std::chrono;
-
     static const duration _1ms = milliseconds(1);
 
+    // Statistics for tracking estimated thread sleep time
     static S64 estimate = INIT_ESTIMATE;
     static F64 mean = INIT_ESTIMATE;
     static F64 m2 = 0;
     static U64 count = 1;
 
-    // Need to reset if we approach any limit,
+    // Statistics for tracking performance
+    static F64 total_in_sleep = 0;
+    static F64 total_in_spin = 0;
+
+    // Need to reset if we approach any precision limit,
     // but we'll be back to normal after ~500 counts
     if (count > MAX_U64 || m2 > MAX_F64)
     {
         m2 = 0;
         count = 1;
     }
+
+    // Reset so we show only recent stats
+    if (total_in_sleep + total_in_spin > 3e3)
+    {
+        total_in_sleep /= 3.0;
+        total_in_spin /= 3.0;
+    }
+
+    auto stopclock_start = high_resolution_clock::now();
 
     S64 nanoseconds = microseconds * (S64)1000;
     while (nanoseconds > estimate) {
@@ -50,9 +65,15 @@ void precise_sleep(U64 microseconds)
         estimate = (S64) (mean + stddev);
     }
 
+    total_in_sleep += (high_resolution_clock::now() - stopclock_start).count() / 1e6;
+    stopclock_start = high_resolution_clock::now();
+
     // spin lock
     auto start = high_resolution_clock::now();
     while ((high_resolution_clock::now() - start).count() < nanoseconds);
+
+    total_in_spin += (high_resolution_clock::now() - stopclock_start).count() / 1e6;
+    gPercentInSpin = total_in_spin * 100.0 / total_in_sleep;
 }
 
 /*
@@ -60,9 +81,6 @@ void precise_sleep(U64 microseconds)
 double gFractionInSpin;
 
 void precise_sleep(U64 microseconds) {
-    using namespace std;
-    using namespace std::chrono;
-
     double seconds = microseconds / 1000000.0;
 
     static double estimate = 5e-3;

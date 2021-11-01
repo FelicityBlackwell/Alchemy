@@ -92,6 +92,7 @@ LLStatusBar::LLStatusBar(const LLRect& rect)
 	mTextFPS(nullptr),
 	mSGBandwidth(nullptr),
 	mSGPacketLoss(nullptr),
+	mSGSpinLock(nullptr),
 	mPanelPopupHolder(nullptr),
 	mBtnQuickSettings(nullptr),
 	mBtnAO(nullptr),
@@ -238,6 +239,31 @@ BOOL LLStatusBar::postBuild()
 	mSGPacketLoss = LLUICtrlFactory::create<LLStatGraph>(pgp);
 	addChild(mSGPacketLoss);
 
+	LLRect slpRect;
+	slpRect.set(0, MENU_BAR_HEIGHT - 1, SIM_STAT_WIDTH, 1);
+	LLStatGraph::Params slp;
+	slp.name("SpinLockPercent");
+	slp.rect(slpRect);
+	slp.follows.flags(FOLLOWS_TOP | FOLLOWS_RIGHT);
+	slp.layout("topleft");
+	slp.mouse_opaque(false);
+	slp.stat("fpslimitspinlockpercentstat");
+	slp.min(0.0f);
+	slp.max(100.0f);
+	slp.decimal_digits(1);
+	slp.label("Spin Lock");
+	LLStatGraph::Thresholds slpThresholds;
+	slpThresholds.threshold	.add(LLStatGraph::ThresholdParams().value(0.0f).color(LLColor4::green))
+							.add(LLStatGraph::ThresholdParams().value(0.125f).color(LLColor4::yellow))
+							.add(LLStatGraph::ThresholdParams().value(0.25f).color(LLColor4::red))
+							.add(LLStatGraph::ThresholdParams().value(0.5f).color(LLColor4::red));
+	slp.thresholds(slpThresholds);
+
+	mSGSpinLock = LLUICtrlFactory::create<LLStatGraph>(slp);
+	mFpsSpinlockPanel = getChild<LLUICtrl>("fps_spinlock_lp");
+	mFpsSpinlockPanel->addChild(mSGSpinLock);
+	mSGSpinLock->setVisible(TRUE);
+
 	mPanelQuickSettingsPulldown = new ALPanelQuickSettingsPulldown();
 	addChild(mPanelQuickSettingsPulldown);
 	mPanelQuickSettingsPulldown->setFollows(FOLLOWS_TOP | FOLLOWS_RIGHT);
@@ -382,6 +408,7 @@ void LLStatusBar::setVisibleForMouselook(bool visible)
 	mTextFPS->setVisible(visible);
 	mSGBandwidth->setVisible(visible);
 	mSGPacketLoss->setVisible(visible);
+	mSGSpinLock->setVisible(visible);
 	mSearchPanel->setVisible(visible && gSavedSettings.getBOOL("MenuSearch"));
 	setBackgroundVisible(visible);
 }

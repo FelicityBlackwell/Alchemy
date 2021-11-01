@@ -285,6 +285,16 @@
         00.0
     </text>
   </layout_panel>
+	<layout_panel
+	 visibility_control="ShowStatusBarFPS"
+	 auto_resize="false"
+	 user_resize="false"
+	 follows="top|right"
+	 height="18"
+	 visible="true"
+	 layout="topleft"
+	 name="fps_spinlock_lp"
+	 width="10" />
   <layout_panel
    visibility_control="ShowNetStats"
    auto_resize="false"
