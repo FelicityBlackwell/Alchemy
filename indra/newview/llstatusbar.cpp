@@ -240,7 +240,7 @@ BOOL LLStatusBar::postBuild()
 	addChild(mSGPacketLoss);
 
 	LLRect slpRect;
-	slpRect.set(0, MENU_BAR_HEIGHT - 1, SIM_STAT_WIDTH, 1);
+	slpRect.set(1, MENU_BAR_HEIGHT - 2, SIM_STAT_WIDTH + 1, 0);
 	LLStatGraph::Params slp;
 	slp.name("SpinLockPercent");
 	slp.rect(slpRect);
