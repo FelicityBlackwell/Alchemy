@@ -37,7 +37,7 @@
                   show_history="true"/>
 		 <stat_bar name="spinlock"
 				   label="Spin Lock"
-				   decimal_digits="1"
+				   decimal_digits="2"
 				   stat="fpslimitspinlockpercentstat"/>
        <stat_bar name="bandwidth"
                   label="UDP Data Received"

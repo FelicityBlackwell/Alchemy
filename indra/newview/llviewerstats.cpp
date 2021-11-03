@@ -276,14 +276,6 @@ void LLViewerStats::updateFrameStats(const F64Seconds time_diff)
 		sample(LLStatViewer::DELTA_BANDWIDTH, F64Bits(delta_bandwidth));
 		sample(LLStatViewer::MAX_BANDWIDTH, F64Bits(max_bandwidth));
 	}
-	
-	if (time_diff > (F64Seconds)0.0 && gPercentInSpin >= 0.0)
-	{
-		F64 fPercentInSpin = 0.0;
-		if (gSavedSettings.getLLSD("FramePerSecondLimit").asInteger() > 0)
-			fPercentInSpin = gPercentInSpin;
-		sample(LLStatViewer::FPS_LIMIT_SPIN_LOCK_PERCENT, LLUnits::Percent::fromValue(fPercentInSpin));
-	}
 
 	mLastTimeDiff = time_diff;
 }
@@ -393,6 +385,8 @@ void update_statistics()
 		sample(LLStatViewer::FPS_SAMPLE, LLTrace::get_frame_recording().getPeriodMeanPerSec(LLStatViewer::FPS));
 	}
 	add(LLStatViewer::FPS, 1);
+
+	sample(LLStatViewer::FPS_LIMIT_SPIN_LOCK_PERCENT, LLUnits::Percent::fromValue(gPercentInSpin));
 
 	F64Bits layer_bits = gVLManager.getLandBits() + gVLManager.getWindBits() + gVLManager.getCloudBits();
 	add(LLStatViewer::LAYERS_NETWORK_DATA_RECEIVED, layer_bits);

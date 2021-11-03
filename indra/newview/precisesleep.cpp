@@ -3,123 +3,61 @@
 #include <chrono>
 #include <thread>
 #include <math.h>
+#include <lltimer.h>
 
-// Modified version of:
-// https://blat-blatnik.github.io/computerBear/making-accurate-sleep-function/
+// Precise sleep, sleeps for a fraction of the actual time, then spin locks
+// Spin lock idea from: https://blat-blatnik.github.io/computerBear/making-accurate-sleep-function/
+// Fractional waiting idea from: https://discourse.differentk.fyi/
 
 
-#define MAX_U64 (UINT64_MAX - 25000000)
-#define MAX_F64 1e25
-#define INIT_ESTIMATE 5000000
+#define MAX_TOTAL_TIME 3e3
+#define TIME_DIVISOR 3.0
+#define SPIN_LOCK_THRESHOLD 5000
 
-F64 gPercentInSpin = -1.0;
+F64 gPercentInSpin = 0.0;
+F64 gPreciseSleepFraction = 0.875;
 
 using namespace std;
 using namespace std::chrono;
 
+#define now high_resolution_clock::now
+#define time_since(start) (now() - start).count()
+
 void precise_sleep(U64 microseconds)
 {
-    static const duration _1ms = milliseconds(1);
-
-    // Statistics for tracking estimated thread sleep time
-    static S64 estimate = INIT_ESTIMATE;
-    static F64 mean = INIT_ESTIMATE;
-    static F64 m2 = 0;
-    static U64 count = 1;
+    auto start = now();
 
     // Statistics for tracking performance
     static F64 total_in_sleep = 0;
     static F64 total_in_spin = 0;
-
-    // Need to reset if we approach any precision limit,
-    // but we'll be back to normal after ~500 counts
-    if (count > MAX_U64 || m2 > MAX_F64)
-    {
-        m2 = 0;
-        count = 1;
-    }
-
+    
     // Reset so we show only recent stats
-    if (total_in_sleep + total_in_spin > 3e3)
+    if (total_in_sleep + total_in_spin > MAX_TOTAL_TIME)
     {
-        total_in_sleep /= 3.0;
-        total_in_spin /= 3.0;
+        total_in_sleep /= TIME_DIVISOR;
+        total_in_spin /= TIME_DIVISOR;
     }
 
-    auto stopclock_start = high_resolution_clock::now();
+    // Sleep for a specified fraction of the desired time
+    S64 nanoseconds = (microseconds * (S64)1000);
+    S64 sleep_time = (S64)(nanoseconds * gPreciseSleepFraction);
+    micro_sleep(sleep_time / 1000);
+    S64 time_slept = time_since(start);
+    S64 remaining_time = nanoseconds - time_slept;
+    total_in_sleep += time_slept / 1e6;
 
-    S64 nanoseconds = microseconds * (S64)1000;
-    while (nanoseconds > estimate) {
-        auto start = high_resolution_clock::now();
-        this_thread::sleep_for(_1ms);
-        auto end = high_resolution_clock::now();
-
-        S64 observed = (end - start).count();
-        nanoseconds -= observed;
-
-        ++count;
-        F64 delta = observed - mean;
-        mean += delta / count;
-        m2 += delta * (observed - mean);
-        F64 stddev = sqrt(m2 / (count - 1));
-        estimate = (S64) (mean + stddev);
+    // spin lock, if time remaining is above threshold
+    if (remaining_time > SPIN_LOCK_THRESHOLD)
+    {
+        auto start = now();
+        while (time_since(start) < remaining_time - SPIN_LOCK_THRESHOLD / 2)
+        {
+#if LL_WINDOWS
+            _YIELD_PROCESSOR();
+#endif
+        }
+        total_in_spin += time_since(start) / 1e6;
     }
 
-    total_in_sleep += (high_resolution_clock::now() - stopclock_start).count() / 1e6;
-    stopclock_start = high_resolution_clock::now();
-
-    // spin lock
-    auto start = high_resolution_clock::now();
-    while ((high_resolution_clock::now() - start).count() < nanoseconds);
-
-    total_in_spin += (high_resolution_clock::now() - stopclock_start).count() / 1e6;
-    gPercentInSpin = total_in_spin * 100.0 / total_in_sleep;
+    gPercentInSpin = total_in_spin * 100.0 / (total_in_sleep + total_in_spin);
 }
-
-/*
-
-double gFractionInSpin;
-
-void precise_sleep(U64 microseconds) {
-    double seconds = microseconds / 1000000.0;
-
-    static double estimate = 5e-3;
-    static double mean = 5e-3;
-    static double m2 = 0;
-    static int64_t count = 1;
-
-    static double total_in_sleep = 0;
-    static double total_in_spin = 0;
-
-    auto stopclock = high_resolution_clock::now();
-
-    while (seconds > estimate) {
-        auto start = high_resolution_clock::now();
-        this_thread::sleep_for(milliseconds(1));
-        auto end = high_resolution_clock::now();
-
-        double observed = (end - start).count() / 1e9;
-        seconds -= observed;
-
-        ++count;
-        double delta = observed - mean;
-        mean += delta / count;
-        m2 += delta * (observed - mean);
-        double stddev = sqrt(m2 / (count - 1));
-        estimate = mean + stddev;
-    }
-
-    total_in_sleep += (high_resolution_clock::now() - stopclock).count() / 1e6;
-
-    stopclock = high_resolution_clock::now();
-
-    // spin lock
-    auto start = high_resolution_clock::now();
-    while ((high_resolution_clock::now() - start).count() / 1e9 < seconds);
-
-    total_in_spin += (high_resolution_clock::now() - stopclock).count() / 1e6;
-
-    gFractionInSpin = total_in_spin * 100.0 / total_in_sleep;
-}
-
-*/

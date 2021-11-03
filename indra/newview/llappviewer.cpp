@@ -698,7 +698,8 @@ LLAppViewer::LLAppViewer()
 	mFastTimerLogThread(nullptr),
 	mAgentRegionLastAlive(false),
 	mIsFirstRun(false),
-	mMinMicroSecPerFrame(0.f)
+	mMinMicroSecPerFrame(0.f),
+	mFPSLimitUsePreciseSleep(false)
 {
 	if(nullptr != sInstance)
 	{
@@ -1280,8 +1281,15 @@ bool LLAppViewer::init()
 	if (winver.dwMajorVersion >= 10 && winver.dwBuildNumber >= 19041)
 		mm_timer_resolution = 1;
 #endif
+
 	gSavedSettings.getControl("FramePerSecondLimit")->getSignal()->connect(boost::bind(&LLAppViewer::onChangeFrameLimit, this, _2));
 	onChangeFrameLimit(gSavedSettings.getLLSD("FramePerSecondLimit"));
+
+	gSavedSettings.getControl("FPSLimitPreciseSleepFraction")->getSignal()->connect(boost::bind(&LLAppViewer::onChangeFrameLimitSleepFraction, this, _2));
+	onChangeFrameLimitSleepFraction(gSavedSettings.getLLSD("FPSLimitPreciseSleepFraction"));
+
+	gSavedSettings.getControl("FPSLimitUsePreciseSleep")->getSignal()->connect(boost::bind(&LLAppViewer::onChangeFrameLimitSleepMethod, this, _2));
+	onChangeFrameLimitSleepMethod(gSavedSettings.getLLSD("FPSLimitUsePreciseSleep"));
 
 	return true;
 }
@@ -1511,7 +1519,10 @@ bool LLAppViewer::doFrame()
 							LL_RECORD_BLOCK_TIME(FTM_SLEEP);
 							// llclamp for when time function gets funky
 							U64 sleep_time = llclamp(mMinMicroSecPerFrame - elapsed_time, (U64)1, (U64)1e6);
-							precise_sleep(sleep_time);
+							if (mFPSLimitUsePreciseSleep)
+								precise_sleep(sleep_time);
+							else
+								micro_sleep(sleep_time);
 						}
 					}
 					last_call = LLTimer::getTotalTime();
@@ -5473,11 +5484,26 @@ bool LLAppViewer::onChangeFrameLimit(LLSD const & evt)
 	else
 	{
 		mMinMicroSecPerFrame = 0;
+		gPercentInSpin = 0.0;
 #if LL_WINDOWS
 		if (isTimerResolution)
 			isTimerResolution = (timeEndPeriod(mm_timer_resolution) != TIMERR_NOERROR);
 #endif
 	}
+	return false;
+}
+
+bool LLAppViewer::onChangeFrameLimitSleepFraction(LLSD const& evt)
+{
+	gPreciseSleepFraction = llclamp(evt.asReal(), 0.0, 1.25);
+	return false;
+}
+
+bool LLAppViewer::onChangeFrameLimitSleepMethod(LLSD const& evt)
+{
+	mFPSLimitUsePreciseSleep = evt.asBoolean();
+	if (!mFPSLimitUsePreciseSleep)
+		gPercentInSpin = 0.0;
 	return false;
 }
 

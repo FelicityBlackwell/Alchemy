@@ -1124,6 +1124,28 @@
       <key>Value</key>
       <integer>120</integer>
     </map>
+	<key>FPSLimitPreciseSleepFraction</key>
+    <map>
+      <key>Comment</key>
+      <string>Fraction of time to sleep before going into spin lock (1.0 = 100%)</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.875</real>
+    </map>
+	<key>FPSLimitUsePreciseSleep</key>
+	<map>
+		<key>Comment</key>
+		<string>FPS limiter uses precise sleep if enabled, otherwise uses OS-provided sleep with no checks (may lead to inconsistent framerate)</string>
+		<key>Persist</key>
+		<integer>1</integer>
+		<key>Type</key>
+		<string>Boolean</string>
+		<key>Value</key>
+		<integer>0</integer>
+	</map>
     <key>BackgroundYieldTime</key>
     <map>
       <key>Comment</key>
